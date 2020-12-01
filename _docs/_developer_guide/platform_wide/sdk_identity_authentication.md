@@ -108,6 +108,7 @@ app.get("/users/me", (request, response) => {
 Now, whenever your app or website normally refreshes its user profile, your application will have access to this new `braze_token` JWT. This token will be passed to the Braze SDK in the next step, [SDK Integration][2].
 
 **JWT Fields Reference**
+
 |Field|Required|Description|
 |-----|-----|-----|
 |`sub`|Yes|The "subject" should equal the User ID you supply Braze SDKs when calling `changeUser`|
