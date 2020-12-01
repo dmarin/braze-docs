@@ -36,27 +36,27 @@ When enabled, this feature will prevent unauthorized access to send or receive d
 
 ## Getting Started
 
-There are three steps needed to get started:
+There are three steps to get started:
 
 ### Step 1: [Server-side Integration][1]
 
-  After generating a public and private key-pair, use your private key to create a JWT (JSON Web Token) for the currently logged-in user. 
+Generate a public and private key-pair, and use your private key to create a JWT (_JSON Web Token_) for the currently logged-in user. 
 
 ### Step 2: [SDK Integration][2]
 
-  After enabling this feature in our SDK, you will need to pass the user's JWT Token signed in your [server-side integration][1] to the Braze SDK.
+Enable this feature in your app and supply the Braze SDK with a JWT Token generated from [in previous step][1].
 
 ### Step 3: [Enabling in the Braze Dashboard][3]
 
-  This feature can be enabled on an app-by-app basis, which means you can integrate this into your different applications one at a time.
+Control this feature's enforcement within the Braze Dashboard. This can be done on an app-by-app basis, so you can work roll out implementation across SDKs (ios, android, and web) instead of all at once.
 
 ## Server-Side Integration {#server-side-integration}
 
 ### Generate a Public/Private Key-pair {#generate-keys}
 
-First, you'll need to generate a public/private key-pair. Keep your Private Key secure, and copy the public key; you'll need to paste that into the Braze Dashboard.
+First, generate a public/private key-pair, and keep your Private Key secure. The Public Key will be pasted into the Braze Dashboard in a later step.
 
-Here's an example of how to generate keys (but you may prefer a different approach):
+In this example, we'll generate a key-pair named `public.pem` and `private.pem`.
 
 ```bash
 openssl genrsa -out private.pem 4096
@@ -64,61 +64,50 @@ openssl rsa -in private.pem -pubout -out public.pem
 ```
 
 {% alert warning %}
-Remember! Keep your private keys _private_. Never expose or hard-code your private key in your app or website. Anyone who knows your private key can impersonate or create users in your Braze account.
+Remember! Keep your private keys _private_. Never expose or hard-code your _private_ key in your app or website. Anyone who knows your private key can impersonate or create users on behalf of your application.
 {% endalert %}
 
-### Generating a user's JSON Web Token {#create-jwt}
+### Sign the user's JSON Web Token {#create-jwt}
 
-At some point in your application's lifecycle, you will need to generate a JWT (server-side) for the currently logged-in user, and provide this to your app or website. 
+Update your application (server-side) to return a JWT Token for the currently logged-in user.
 
-Typically, this logic could go wherever your app normally requests the current user's profile.
+Typically, this logic could go wherever your app normally requests the current user's profile, such as after a user logs in, or when you refresh the user's profile.
 
-For example, your application might have a `GET /users/me` endpoint, which is requested upon succesful login, session start, and periodically throughout the session.
-
-Before implementing, your code may look something like this:
+For example, your application might have a `GET /users/me` endpoint that looks for a cookie or session token before returning the user's profile information.
 
 ```javascript
 app.get("/users/me", (request, response) => {
   const authorization_cookie = request.cookies.authorization;
   const user = lookupUserByCookie(authorization_cookie);
-  if (user === false) {
-    throw new Error("You are not logged in!");
-  }
-  
-  return response.json({
-    user: user
-  });
+  return response.json({ user });
 });
 ```
 
-Instead, we will also sign a JSON Web Token and return it in this same endpoint's response:
+You could simply append a JWT Token in this same endpoint's response:
 
 ```javascript
+import jwt from "jsonwebtoken"; // use a JWT library of your choice
+const PRIVATE_KEY = fs.readFileSync("/path/to/private.pem").toString("ascii");
 app.get("/users/me", (request, response) => {
-  import jwt from "jsonwebtoken"; // use a JWT library of your choice
-
   const authorization_cookie = request.cookies.authorization;
   const user = lookupUserByCookie(authorization_cookie);
-  if (user === false) {
-    throw new Error("You are not logged in!");
-  }
-  
   const braze_token_payload = {
-    sub: user.id // the subject should match the user ID supplied to Braze SDK when calling `changeUser`
-    exp: Math.floor(Date.now() / 1000) + ONE_DAY_IN_SECONDS) // the expiration for this temporary token
+    // the subject is the same user ID supplied to Braze's `changeUser` method
+    sub: user.id, 
+    exp: Math.floor(Date.now() / 1000) + ONE_DAY_IN_SECONDS) 
   }
   const braze_token = jwt.sign(braze_token_payload, PRIVATE_KEY, { algorithm: "RS256" });
 
   return response.json({
-    user: user,
-    braze_token: braze_token // new property returned in this endpoint
+    user,
+    braze_token // new property returned in this endpoint
   });
 });
 ```
-Now, whenever your app or website normally refreshes its user profile, your application will have access to this new `braze_token` JWT. You'll need pass this token to the Braze SDK in the next step's [SDK Integration][2].
 
-**JWT Fields**
+Now, whenever your app or website normally refreshes its user profile, your application will have access to this new `braze_token` JWT. This token will be passed to the Braze SDK in the next step, [SDK Integration][2].
 
+**JWT Fields Reference**
 |Field|Required|Description|
 |-----|-----|-----|
 |`sub`|Yes|The "subject" should equal the User ID you supply Braze SDKs when calling `changeUser`|
@@ -129,11 +118,13 @@ Now, whenever your app or website normally refreshes its user profile, your appl
 
 ### Enable this feature in the Braze SDK.
 
-This will add your generated JWT tokens in network requests made to Braze.
+When this feature is enabled, Braze SDKs will append the last known JWT token to network requests made to Braze.
+
+Don't worry! You can always disable this feature from the Braze Dashboard, even if the SDK has this enabled.
 
 {% tabs %}
 {% tab Web SDK %}
-When calling `appboy.initialize`, set the optional `sdkAuthentication` property to `true`
+When calling `appboy.initialize`, set the optional `sdkAuthentication` property to `true`.
 
 ```javascript
 appboy.initialize('YOUR-API-KEY-HERE', {
@@ -157,12 +148,11 @@ todo
 {% endtab %}
 {% endtabs %}
 
-
 ### Pass the current user's JWT token when calling `changeUser`. 
 
-Typically when a user logs in or is created for the first time, your app will call Braze's `changeUser` method, which clears any previous user data. Add the JWT token [generated server-side][4] to the Braze SDK's `changeUser` method.
+Whenever your app calls the Braze `changeUser` method, also append the JWT token that was [generated server-side][4].
 
-You can also update the JWT when refreshing the user's profile to avoid the token from expiring mid-session.
+You can also update the token at any point in the future, for example: to avoid a token from expiring mid-session.
 
 {% tabs %}
 {% tab Web SDK %}
