@@ -112,7 +112,7 @@ Now, whenever your app or website normally refreshes its user profile, your appl
 |Field|Required|Description|
 |-----|-----|-----|
 |`sub`|Yes|The "subject" should equal the User ID you supply Braze SDKs when calling `changeUser`|
-|`exp`|Yes|The "expiration" of when you want this token to expire. [How long should it be?](#faq-expiration)|
+|`exp`|Yes|The "expiration" of when you want this token to expire.
 
 
 ## SDK Integration {#sdk-integration}
